@@ -1,0 +1,180 @@
+;; 先想清楚函数的返回值是什么，是个单值？还是个列表？
+;; 然后想想针对入参你需要问哪些问题
+;; 最后，再想想终结条件是什么,终结值是什么
+;; 通过函数调用栈来存储临时变量，并在每次递归的时候改变参数以推进递归的前进
+
+; Law
+;
+; The Law of Car
+; The primitive `car is defined only for non-empty lists
+;
+; The Law of Cdr
+; The primitive `cdr is defined only for non-empty lists. The `cdr of any non-empty list is alwyas another list.
+;
+; The Law of Cons
+; The primitive `cons takes two arguments. The second argument ot cons must be a list. The result is a list.
+;
+; The Law of Null?
+; The primitive `null? is defined only for lists.
+;
+; The Law of Eq?
+; The primitive `eq? takes two arguments. Each must be a non-numeric atom.
+
+
+; Commandments
+;
+; 1. Always ask `null?` as the first question in expressing any function.
+; New 1. When recurring on a list of atoms, lat, ask two questions about it: (null? lat) or else;
+; When recurring on a number, n, ask two questions about it: (zero? n) or else
+; Final 1. When recurring on a list of atoms, 'lat', ask two questions about it: (null? lat) and else
+;  When recurring on a number, n, ask two questions about it: (zero? n) and else
+;  When recurring on a S-expressions, l, ask three questions about it: (null? l), (atom? (car l)), and else.
+;
+; 2. Use `cons` to build list.
+;
+; 3. When build a list, describe the first typical element, and then `cons` it onto the natural recursion
+;
+; 4. (preliminary) Always change at least one argument while recurring. When recurring on a list of atoms, lat, use `(cdr lat).
+; When recurring on a number, n, use (sub1 n). And when recurring on a list of S-expression, l, use (car l) and (cdr l) if neither (null? l) nor (atom? (car l)) are true.
+; It must be changed to be closer to termination. The changing argument must be tested in the termination condition: when using `cdr`, test termination with `null?`;
+; when using `sub1`, test termination with `zero?`.
+;
+; 5. When building a value with +, always use 0 for the value of the terminating line, for adding 0 does not change the value of an addition.
+;   When building a value with x, always use 1 for the value of the terminating line, for multiplying by 1 does not change the value of a multiplication.
+;   When building a value with cons, always consider () for the value of the termianting line.
+;
+; 6. Simplify only after the function is correct.
+;
+; 7. Recur on the 'subparts' that are of the same nature:
+; - On the sublists of a list.
+; - One the subexpressions of an arithmetic expression.
+;
+; 8. Use help functions to abstract from representations.
+
+
+; Just like 'lat' represents a list of atom, tuple represents a list of number. They both accommondate empty list.
+
+; What is an S-expression? An S-expression is either an atom or a (possibly empty) list of S-expression.
+
+
+(define atom? 
+	(lambda (x)
+	(and (not (pair? x)) (not (null? x)))))
+
+(define lat?
+	(lambda (l)
+		(cond 
+			((null? l) #t)
+		((atom? (car l)) (lat? (cdr l))))
+	(else #f)))
+
+(define member?
+	(lambda (a lat) 
+		(cond ((null? lat) #f)
+		(else (or (eq? a (car lat)) (member? a (cdr lat)))))))
+
+; It takes an atom and a list as its arguments, returns a new list with
+; the first occurence of the atom removed from the old list.
+(define rember
+	(lambda (a lat) 
+		(cond ((null? lat) ())
+			((eq? a (car lat)) (cdr lat))
+			(else (cons (car lat) (rember a (cdr lat)))))))
+
+; It takes one argument, a list, which is either a empty list or contians only
+; non-empty lists. It builds another list which composed of the first S-expression
+; of each internal list.
+(define firsts
+  (lambda (l) (cond ((null? l) '())
+        ((atom? (car l)) (firsts (cdr l)))
+    (else (cons (car (car l)) (firsts (cdr l)))))))
+
+(define (insertR new old lat)
+  (cond ((null? lat) '())
+        (else (cond ((eq? (car lat) old) (cons old (cons new (cdr lat))))
+              (else (cons (car lat) (insertR new old (cdr lat))))))))
+
+(define (insertL new old lat)
+  (cond ((null? lat) '())
+        (else (cond ((eq? (car lat) old) (cons new lat))
+              (else (cons (car lat) (insertL new old (cdr lat))))))))
+
+(define (subst new old lat)
+  (cond ((null? lat) '())
+        (else (cond ((eq? (car lat) old) (cons new (cdr lat)))
+              (else (cons (car lat) (subst new old (cdr lat))))))))
+
+(define (multirember a lat) 
+		(cond ((null? lat) ())
+			((eq? a (car lat)) (multirember a (cdr lat)))
+			(else (cons (car lat) (multirember a (cdr lat))))))
+
+(define (multiinsertL new old lat)
+  (cond ((null? lat) '())
+        (else (cond ((eq? old (car lat)) (cons new (cons old (multiinsertL new old (cdr lat)))))
+              (else (cons (car lat) (multiinsertL new old (cdr lat))))))))
+
+(define (multiinsertR new old lat)
+  (cond ((null? lat) '())
+        (else (cond ((eq? old (car lat)) (cons old (cons new (multiinsertR new old (cdr lat)))))
+              (else (cons (car lat) (multiinsertR new old (cdr lat))))))))
+
+(define (eqan? a1 a2)
+  (cond ((and (number? a1) (number? a2)) (= a1 a2))
+        ((or (number? a1) (number? a2) #f))
+      (else (eq? a1 a2))))
+
+; occur, which counts the number of times an atom appears in a lat. It takes an atom and a lat, but recurs on
+; the lat, so the termination and nature recurrence is about the list. And then you got to ask questions and take actions.
+; The value returned is a number, so it comes with `add1`.
+(define (occur a lat)
+  (cond ((null? lat) 0)
+        (else (cond ((eq? a (car lat)) (+ 1 (occur a (cdr lat))))
+              (else (occur a (cdr lat)))))))
+
+(define (rempick n lat)
+  (cond ((zero? (- n 1)) (cdr lat))
+        (else (cons (car lat) (rempick (- n 1) (cdr lat))))))
+
+(define (rempick n lat)
+  (cond (= n 1) (cdr lat))
+        (else (cons (car lat) (rempick (- n 1) (cdr lat)))))
+
+(define (rember* a l)
+  (cond ((null? l) ())
+        ((atom? (car l)) (cond ((eq? a (car l)) (rember* a (cdr l)))
+              (else (cons (car l) (rember* a (cdr l))))))
+      (else (cons (rember* a (car l)) (rember* a (cdr l))))))
+
+(define (insertR* new old l)
+  (cond ((null? l) ())
+        ((atom? (car l)) (cond ((eq? old (car l)) (cons old (cons new (insertR* new old (cdr l)))))
+              (else (cons (car l) (insertR* new old (cdr l))))))
+      (else (cons (insertR* new old (car l)) (insertR* new old (cdr l))))))
+
+; using 'or' to build a boolean, and end the recusion with #f.
+(define (member* a l)
+  (cond ((null? l) #f)
+        ((atom? (car l)) (or (eq? a (car l)) (member* a (cdr l))))
+      (else (or (member* a (car l)) (member* a (cdr l))))))
+
+; How are all *-functions similar?
+; They all ask three questions and recur with the car as well as the cdr, whenever the car is a list
+
+; The next two are entangled. Try to comprehend them a little deeper.
+(define (eqlist? l1 l2)
+  (cond ((and (null? l1) (null? l2)) #t)
+        ((or (null? l1) (null? l2) ) #f)
+      (else (and (equal? (car l1) (car l2)) (eqlist? (cdr l1) (cdr l2))))))
+
+(define (equal? s1 s2)
+  (cond ((and (atom? s1) (atom? s2)) (eqan? s1 s2))
+        ((or (atom? s1) (atom? s2)) #f)
+      (else (eqlist? s1 s2))))
+
+; new rember which takes an atom and an S-expression.
+(define rember2
+  (lambda (a l) 
+    (cond ((null? lat) ())
+      ((equal? a (car lat)) (cdr lat))
+      (else (cons (car lat) (rember a (cdr lat)))))))
